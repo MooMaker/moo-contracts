@@ -8,7 +8,7 @@ import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 TODO:
 - Prevent signature replayability
  */
-contract MooMaker {
+contract MooMaker is Ownable2Step{
 
     struct Order {
         IERC20 tokenIn;
@@ -97,11 +97,11 @@ contract MooMaker {
     } 
 
 
-    function addMaker(address _maker) external {    
+    function addMaker(address _maker) external onlyOwner {    
         isWhitelistedMaker[_maker] = true;
     }
 
-    function removeMaker(address _maker) external {
+    function removeMaker(address _maker) external onlyOwner {
         isWhitelistedMaker[_maker] = false;
     }  
 }
