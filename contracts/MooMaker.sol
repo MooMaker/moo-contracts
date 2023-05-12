@@ -18,6 +18,7 @@ contract MooMaker is Ownable2Step{
         uint256 validTo;
         address maker;
         uint256 nonce;
+        bytes uid; // cow order id
     } 
 
     bytes32 immutable DOMAIN_SEPARATOR; 
@@ -32,7 +33,7 @@ contract MooMaker is Ownable2Step{
     );
 
     bytes32 constant ORDER_TYPEHASH = keccak256(
-        "Order(address tokenIn, uint256 amountIn, address tokenOut, uint256 amountOut, uint256 validTo, address maker, uint256 nonce)"
+        "Order(address tokenIn,uint256 amountIn,address tokenOut,uint256 amountOut,uint256 validTo,address maker,uint256 nonce,bytes uid)"
     );
 
 
@@ -68,7 +69,8 @@ contract MooMaker is Ownable2Step{
             _order.tokenOut,
             _order.amountOut,    
             _order.validTo,            
-            _order.maker
+            _order.maker,
+            _order.uid
         ));
     }
 
