@@ -3,10 +3,10 @@ pragma solidity ^0.8.18;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 /**
 TODO:
 - Prevent signature replayability
-- whitelisting
  */
 contract MooMaker {
 
@@ -24,6 +24,8 @@ contract MooMaker {
 
     //CoW rinkeby settlement contract
     address public constant authorizedAddress = 0x9008D19f58AAbD9eD0D60971565AA8510560ab41;
+
+    mapping(address => bool) public isWhitelistedMaker;
     
     bytes32 constant EIP712DOMAIN_TYPEHASH = keccak256(
         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
@@ -81,6 +83,9 @@ contract MooMaker {
         // only cow contract can execute swap
         require(msg.sender == authorizedAddress, "Unauthorized");
 
+        // maker must be whitelisted
+        require(isWhitelistedMaker[_order.maker], "Not Maker");  
+
         // verify maker signature
         _requireValidSignature(_order.maker, hashToSign(hashOrder(_order)), _signature);
 
@@ -90,4 +95,13 @@ contract MooMaker {
         require(_order.tokenIn.transferFrom(msg.sender, _order.maker, _order.amountIn), "In transfer failed");
         require(_order.tokenOut.transferFrom(_order.maker, msg.sender, _order.amountOut), "Out transfer failed");
     } 
+
+
+    function addMaker(address _maker) external {    
+        isWhitelistedMaker[_maker] = true;
+    }
+
+    function removeMaker(address _maker) external {
+        isWhitelistedMaker[_maker] = false;
+    }  
 }
