@@ -10,6 +10,16 @@ TODO:
  */
 contract MooMaker is Ownable2Step{
 
+    event Swap(
+        address tokenIn,
+        uint256 amountIn,
+        address tokenOut,
+        uint256 amountOut,
+        uint256 validTo,
+        address indexed maker,
+        bytes indexed uid
+    );
+
     struct Order {
         IERC20 tokenIn;
         uint256 amountIn;
@@ -115,6 +125,16 @@ contract MooMaker is Ownable2Step{
         // swap
         require(_order.tokenIn.transferFrom(msg.sender, _order.maker, _order.amountIn), "In transfer failed");
         require(_order.tokenOut.transferFrom(_order.maker, msg.sender, _order.amountOut), "Out transfer failed");
+
+        emit Swap(
+            _order.tokenIn,
+            _order.amountIn,
+            _order.tokenOut,
+            _order.amountOut,    
+            _order.validTo,        
+            _order.maker,
+            _order.uid
+        )
     } 
 
 
