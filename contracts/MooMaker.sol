@@ -17,7 +17,6 @@ contract MooMaker is Ownable2Step{
         uint256 amountOut;
         uint256 validTo;
         address maker;
-        uint256 nonce;
         bytes uid; // cow order id
     } 
 
@@ -36,6 +35,9 @@ contract MooMaker is Ownable2Step{
         "Order(address tokenIn,uint256 amountIn,address tokenOut,uint256 amountOut,uint256 validTo,address maker,uint256 nonce,bytes uid)"
     );
 
+    //used to invalidtaed executed trades to avoid reusage of maker quote
+    mapping(bytes32 => bool) public invalidatedOrders;
+
 
     constructor() {
         DOMAIN_SEPARATOR = keccak256(
@@ -49,6 +51,7 @@ contract MooMaker is Ownable2Step{
         );
     }
 
+    //generates signature from received order hash
     function hashToSign(bytes32 _orderHash)
         public
         view
@@ -61,6 +64,7 @@ contract MooMaker is Ownable2Step{
         ));
     }
 
+    //hashes order data
     function hashOrder(Order memory _order) private pure returns (bytes32) {
         return keccak256(abi.encode(
             ORDER_TYPEHASH,
@@ -68,18 +72,27 @@ contract MooMaker is Ownable2Step{
             _order.amountIn,
             _order.tokenOut,
             _order.amountOut,    
-            _order.validTo,            
+            _order.validTo,        
             _order.maker,
             _order.uid
         ));
     }
 
+    //view function that can be called by test maker to generate signature for each order
+    function generateEIP712Hash(Order memory _order) public view returns (bytes32) {
+        bytes32 hash = hashOrder(_order);
+        bytes32 signature = hashToSign(hash);
+        return signature;
+    } 
+
+
+    //checks validity of signature before settlement
     function _requireValidSignature(address _signer, bytes32 _orderHash, bytes calldata _signature) internal view {
         require(
                 SignatureChecker.isValidSignatureNow(_signer, _orderHash, _signature),
                 "Invalid signature"
         );
-    }
+    }  
 
     function swap(Order calldata _order, bytes calldata _signature) external {
         // only cow contract can execute swap
@@ -88,22 +101,33 @@ contract MooMaker is Ownable2Step{
         // maker must be whitelisted
         require(isWhitelistedMaker[_order.maker], "Not Maker");  
 
-        // verify maker signature
-        _requireValidSignature(_order.maker, hashToSign(hashOrder(_order)), _signature);
+        //checking that it is not to late to use maker quote
+        require(block.timestamp < _order.validTo, "Expired");  
 
-        require(block.timestamp < _order.validTo, "Expired");       
+        bytes32 orderhash = hashOrder(_order);        
+
+        // verify maker signature
+        _requireValidSignature(_order.maker, orderhash, _signature);        
+
+        //Checking that quote is not reused
+        require(invalidatedOrders[orderhash], "Quote used");        
 
         // swap
         require(_order.tokenIn.transferFrom(msg.sender, _order.maker, _order.amountIn), "In transfer failed");
         require(_order.tokenOut.transferFrom(_order.maker, msg.sender, _order.amountOut), "Out transfer failed");
+        invalidateOrder(orderhash);
     } 
 
 
     function addMaker(address _maker) external onlyOwner {    
         isWhitelistedMaker[_maker] = true;
-    }
+    } 
 
     function removeMaker(address _maker) external onlyOwner {
         isWhitelistedMaker[_maker] = false;
     }  
+
+    function invalidateOrder(bytes32 _hash) internal {    
+        invalidatedOrders[_hash] = true;
+    }       
 }
