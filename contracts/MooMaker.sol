@@ -32,7 +32,7 @@ contract MooMaker is Ownable2Step{
     );
 
     bytes32 constant ORDER_TYPEHASH = keccak256(
-        "Order(address tokenIn,uint256 amountIn,address tokenOut,uint256 amountOut,uint256 validTo,address maker,uint256 nonce,bytes uid)"
+        "Order(address tokenIn,uint256 amountIn,address tokenOut,uint256 amountOut,uint256 validTo,address maker,bytes uid)"
     );
 
     //used to invalidtaed executed trades to avoid reusage of maker quote
@@ -107,15 +107,14 @@ contract MooMaker is Ownable2Step{
         bytes32 orderhash = hashOrder(_order);        
 
         // verify maker signature
-        _requireValidSignature(_order.maker, orderhash, _signature);        
+        _requireValidSignature(_order.maker, hashToSign(orderhash), _signature);        
 
         //Checking that quote is not reused
-        require(invalidatedOrders[orderhash], "Quote used");        
+        invalidateOrder(orderhash);
 
         // swap
         require(_order.tokenIn.transferFrom(msg.sender, _order.maker, _order.amountIn), "In transfer failed");
         require(_order.tokenOut.transferFrom(_order.maker, msg.sender, _order.amountOut), "Out transfer failed");
-        invalidateOrder(orderhash);
     } 
 
 
@@ -127,7 +126,8 @@ contract MooMaker is Ownable2Step{
         isWhitelistedMaker[_maker] = false;
     }  
 
-    function invalidateOrder(bytes32 _hash) internal {    
+    function invalidateOrder(bytes32 _hash) internal {
+        require(!invalidatedOrders[_hash], "Invalid Order");
         invalidatedOrders[_hash] = true;
     }       
 }
