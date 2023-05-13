@@ -61,7 +61,7 @@ contract MooMaker is Ownable2Step{
         );
     }
 
-    //generates signature from received order hash
+    //generates hash to be signed by maker from received order hash
     function hashToSign(bytes32 _orderHash)
         public
         view
@@ -75,7 +75,7 @@ contract MooMaker is Ownable2Step{
     }
 
     //hashes order data
-    function hashOrder(Order memory _order) private pure returns (bytes32) {
+    function _hashOrder(Order memory _order) private pure returns (bytes32) {
         return keccak256(abi.encode(
             ORDER_TYPEHASH,
             _order.tokenIn,
@@ -88,11 +88,9 @@ contract MooMaker is Ownable2Step{
         ));
     }
 
-    //view function that can be called by test maker to generate signature for each order
+    //view function that can be called by test maker to generate hash that maker has to sign
     function generateEIP712Hash(Order memory _order) public view returns (bytes32) {
-        bytes32 hash = hashOrder(_order);
-        bytes32 signature = hashToSign(hash);
-        return signature;
+        return hashToSign(_hashOrder(_order));
     } 
 
 
@@ -114,13 +112,13 @@ contract MooMaker is Ownable2Step{
         //checking that it is not to late to use maker quote
         require(block.timestamp < _order.validTo, "Expired");  
 
-        bytes32 orderhash = hashOrder(_order);        
+        bytes32 orderhash = _hashOrder(_order);        
 
         // verify maker signature
         _requireValidSignature(_order.maker, hashToSign(orderhash), _signature);        
 
         //Checking that quote is not reused
-        invalidateOrder(orderhash);
+        _invalidateOrder(orderhash);
 
         // swap
         require(_order.tokenIn.transferFrom(msg.sender, _order.maker, _order.amountIn), "In transfer failed");
@@ -146,7 +144,7 @@ contract MooMaker is Ownable2Step{
         isWhitelistedMaker[_maker] = false;
     }  
 
-    function invalidateOrder(bytes32 _hash) internal {
+    function _invalidateOrder(bytes32 _hash) internal {
         require(!invalidatedOrders[_hash], "Invalid Order");
         invalidatedOrders[_hash] = true;
     }       
