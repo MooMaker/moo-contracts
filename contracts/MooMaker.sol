@@ -32,7 +32,7 @@ contract MooMaker is Ownable2Step{
 
     bytes32 immutable DOMAIN_SEPARATOR; 
 
-    //CoW rinkeby settlement contract
+    //CoW rinkeby/gnosis/mainnet settlement contract
     address public constant authorizedAddress = 0x9008D19f58AAbD9eD0D60971565AA8510560ab41;
 
     mapping(address => bool) public isWhitelistedMaker;
@@ -127,14 +127,14 @@ contract MooMaker is Ownable2Step{
         require(_order.tokenOut.transferFrom(_order.maker, msg.sender, _order.amountOut), "Out transfer failed");
 
         emit Swap(
-            _order.tokenIn,
+            address(_order.tokenIn),
             _order.amountIn,
-            _order.tokenOut,
+            address(_order.tokenOut),
             _order.amountOut,    
             _order.validTo,        
             _order.maker,
             _order.uid
-        )
+        );
     } 
 
 
