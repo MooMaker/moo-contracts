@@ -4,10 +4,7 @@ pragma solidity ^0.8.18;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
-/**
-TODO:
-- Prevent signature replayability
- */
+
 contract MooMaker is Ownable2Step{
 
     event Swap(
