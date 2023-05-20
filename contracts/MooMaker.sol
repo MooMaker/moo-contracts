@@ -2,10 +2,8 @@
 pragma solidity ^0.8.18;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
-import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 
-contract MooMaker is Ownable2Step{
+contract MooMaker{
 
     event Swap(
         address tokenIn,
@@ -18,9 +16,9 @@ contract MooMaker is Ownable2Step{
     );
 
     struct Order {
-        IERC20 tokenIn;
+        address tokenIn;
         uint256 amountIn;
-        IERC20 tokenOut;
+        address tokenOut;
         uint256 amountOut;
         uint256 validTo;
         address maker;
@@ -49,17 +47,42 @@ contract MooMaker is Ownable2Step{
     constructor() {
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
-                EIP712DOMAIN_TYPEHASH,
                 keccak256("MooMaker"), // contract name
                 keccak256("1"), // Version
-                block.chainid,
+                1,
                 address(this)
             )
         );
     }
 
-    //generates hash to be signed by maker from received order hash
-    function hashToSign(bytes32 _orderHash)
+    function addMaker(address _maker) external {    
+        isWhitelistedMaker[_maker] = true;
+    } 
+
+    function removeMaker(address _maker) external {
+        isWhitelistedMaker[_maker] = false;
+    }  
+
+    function _invalidateOrder(bytes32 _hash) internal {
+        require(!invalidatedOrders[_hash], "Invalid Order");
+        invalidatedOrders[_hash] = true;
+    }       
+
+    //hashes order data
+    function _hashOrder(Order memory _order) public pure returns (bytes32) {
+        return keccak256(abi.encode(
+            _order.tokenIn,
+            _order.amountIn,
+            _order.tokenOut,
+            _order.amountOut,    
+            _order.validTo,        
+            _order.maker,
+            _order.uid
+        ));
+    }
+
+    //generates final hash including domain separator to be signed by maker from received order hash
+    function getEthSignedMessageHash(bytes32 _orderHash)
         public
         view
         returns (bytes32 hash)
@@ -71,55 +94,56 @@ contract MooMaker is Ownable2Step{
         ));
     }
 
-    //hashes order data
-    function _hashOrder(Order memory _order) private pure returns (bytes32) {
-        return keccak256(abi.encode(
-            ORDER_TYPEHASH,
-            _order.tokenIn,
-            _order.amountIn,
-            _order.tokenOut,
-            _order.amountOut,    
-            _order.validTo,        
-            _order.maker,
-            _order.uid
-        ));
-    }
-
     //view function that can be called by test maker to generate hash that maker has to sign
     function generateEIP712Hash(Order memory _order) public view returns (bytes32) {
-        return hashToSign(_hashOrder(_order));
+        return getEthSignedMessageHash(_hashOrder(_order));
     } 
 
+    function recoverSigner(
+        bytes32 _hash,
+        bytes memory signature
+    ) public view returns (address) {
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        bytes32 messageHash = getEthSignedMessageHash(_hash);
 
-    //checks validity of signature before settlement
-    function _requireValidSignature(address _signer, bytes32 _orderHash, bytes calldata _signature) internal view {
-        require(
-                SignatureChecker.isValidSignatureNow(_signer, _orderHash, _signature),
-                "Invalid signature"
-        );
-    }  
+        assembly {
+            r := mload(add(signature, 32))
+            s := mload(add(signature, 64))
+            v := byte(0, mload(add(signature, 96)))
+        }
 
-    function swap(Order calldata _order, bytes calldata _signature) external {
+        if (v < 27) {
+            v += 27;
+        }
+
+        return ecrecover(messageHash, v, r, s);
+    }   
+
+    function swap(Order memory _order, bytes memory _signature) external {
         // only cow contract can execute swap
-        require(msg.sender == authorizedAddress, "Unauthorized");
+        //require(msg.sender == authorizedAddress, "Unauthorized");
 
         // maker must be whitelisted
-        require(isWhitelistedMaker[_order.maker], "Not Maker");  
+        //require(isWhitelistedMaker[_order.maker], "Not Maker");  
 
         //checking that it is not to late to use maker quote
-        require(block.timestamp < _order.validTo, "Expired");  
-
-        bytes32 orderhash = _hashOrder(_order);        
+        //require(block.timestamp < _order.validTo, "Expired");  
 
         // verify maker signature
-        _requireValidSignature(_order.maker, hashToSign(orderhash), _signature);        
+        bytes32 orderhash = _hashOrder(_order);
+        address recsigner = recoverSigner(orderhash, _signature);          
+        require(recsigner == _order.maker, "Ivalid signature");  
 
         //Checking that quote is not reused
         _invalidateOrder(orderhash);
 
         // swap
-        require(_order.tokenIn.transferFrom(msg.sender, _order.maker, _order.amountIn), "In transfer failed");
-        require(_order.tokenOut.transferFrom(_order.maker, msg.sender, _order.amountOut), "Out transfer failed");
+        IERC20 tokenIn = IERC20(_order.tokenIn);
+        IERC20 tokenOut = IERC20(_order.tokenOut);
+        require(tokenIn.transferFrom(msg.sender, _order.maker, _order.amountIn), "In transfer failed");
+        require(tokenOut.transferFrom(_order.maker, msg.sender, _order.amountOut), "Out transfer failed");
 
         emit Swap(
             address(_order.tokenIn),
@@ -130,19 +154,5 @@ contract MooMaker is Ownable2Step{
             _order.maker,
             _order.uid
         );
-    } 
-
-
-    function addMaker(address _maker) external onlyOwner {    
-        isWhitelistedMaker[_maker] = true;
-    } 
-
-    function removeMaker(address _maker) external onlyOwner {
-        isWhitelistedMaker[_maker] = false;
-    }  
-
-    function _invalidateOrder(bytes32 _hash) internal {
-        require(!invalidatedOrders[_hash], "Invalid Order");
-        invalidatedOrders[_hash] = true;
-    }       
+    }     
 }
