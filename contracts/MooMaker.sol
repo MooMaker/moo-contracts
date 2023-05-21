@@ -47,9 +47,10 @@ contract MooMaker{
     constructor() {
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
+                EIP712DOMAIN_TYPEHASH,
                 keccak256("MooMaker"), // contract name
                 keccak256("1"), // Version
-                1,
+                block.chainid,
                 address(this)
             )
         );
@@ -71,6 +72,7 @@ contract MooMaker{
     //hashes order data
     function _hashOrder(Order memory _order) public pure returns (bytes32) {
         return keccak256(abi.encode(
+            ORDER_TYPEHASH,
             _order.tokenIn,
             _order.amountIn,
             _order.tokenOut,
